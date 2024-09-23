@@ -1,8 +1,15 @@
 package com.example.downloadingfeaturesapplication
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.ServiceConnection
 import android.content.SharedPreferences
 import android.os.Bundle
+import android.os.IBinder
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -36,6 +43,23 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    var recevier : BroadcastReceiver ?= null
+    private var downloadService : DownloadService ?= null
+    private var isBound = false
+
+    private val service = object : ServiceConnection {
+        override fun onServiceConnected(p0: ComponentName?, binder: IBinder?) {
+            val binder2 = binder as DownloadService.LocalBinder
+            downloadService = binder2.getService()
+            isBound = true
+        }
+
+        override fun onServiceDisconnected(p0: ComponentName?) {
+            isBound = false
+        }
+
+    }
+
     @OptIn(ExperimentalPermissionsApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,23 +89,36 @@ class MainActivity : ComponentActivity() {
                     buttonClick = value
                 }
 
-                showDownloadedCompleted = VALUE_IS_ADDED.first
-                pdfUri = VALUE_IS_ADDED.second
+                /*recevier = object : BroadcastReceiver() {
+                    override fun onReceive(context: Context?, intent: Intent?) {
+                        if (intent != null) {
+                            pdfUri = intent.getStringExtra("pdfFile").toString()
+                            showDownloadedCompleted = intent.getBooleanExtra("isDownloaded",false)
+                        }
+                    }
+
+                }*/
+
+                if (isBound) {
+                    val data = downloadService?.getService()
+                    if (data != null) {
+                        showDownloadedCompleted = data.first
+                        pdfUri = data.second
+                    }
+                }
+
                 if(showDownloadedCompleted){
                     waterNotificationService.showBasicNotification(pdfUri)
                 }
 
-                if(Utils.preferences.contains("fileDownloaded")){
-                    Log.d("#PreviewFile", "VALUE_IS_ADDED = $VALUE_IS_ADDED")
-                    Utils.preferences.getString("pdfUrl","")
-                        ?.let { waterNotificationService.showBasicNotification(it) }
-                }
-
-               LaunchedEffect(Unit) {
+                LaunchedEffect(Unit) {
                     scope.launch {
                         Log.d("#PreviewFile", "ViewModel response")
                         viewModel.downloadViewModel.collectLatest {
-                            Log.d("#PreviewFile", "ViewModel response value ${it.first}, ${it.second}")
+                            Log.d(
+                                "#PreviewFile",
+                                "ViewModel response value ${it.first}, ${it.second}"
+                            )
                             showDownloadedCompleted = it.first
                             pdfUri = it.second
                             DownloadService().stopSelf()
@@ -102,6 +139,20 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Intent(this, DownloadService::class.java).also { intent ->
+            bindService(intent, service, Context.BIND_AUTO_CREATE)
+        }
+    }
+
+    override fun onStop() {
+        if (isBound) {
+            unbindService(service)
+            isBound = false
         }
     }
 }

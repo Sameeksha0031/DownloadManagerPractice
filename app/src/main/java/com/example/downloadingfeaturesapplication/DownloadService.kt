@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
+import android.os.Binder
 import android.os.Environment
 import android.os.IBinder
 import android.util.Log
@@ -31,14 +32,19 @@ import java.net.URL
 
 class DownloadService : Service() {
 
+    private val binder = LocalBinder()
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
     private var downloadManager : DownloadManager ?= null
     private var downloadId:Long = -1
     private val downloadRepository = DownloadRepository()
+    var pdfUrlLocal = ""
+    var isDownloaded = false
 
-    override fun onBind(p0: Intent?): IBinder? {
-        return null
+    override fun onBind(p0: Intent?): IBinder = binder
+
+    inner class LocalBinder : Binder() {
+        fun getService(): DownloadService = this@DownloadService
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -136,33 +142,28 @@ class DownloadService : Service() {
                     fileOutputStream.write(buffer, 0, length)
                 }
 
-                serviceScope.launch {
-                    Log.d("#DownloadFeaature","Inside Scope function")
-                    downloadRepository.updateData(true,pdfFile.toString())
-                }
-
+                pdfUrlLocal = pdfFile.toString()
+                isDownloaded = true
                 // Close streams
                 fileOutputStream.flush()
                 fileOutputStream.close()
                 inputStream.close()
                 urlConnection.disconnect()
 
+//                serviceScope.launch {
+//                    Log.d("#DownloadFeaature","Inside Scope function")
+//                    downloadRepository.updateData(true,pdfFile.toString())
+//                }
+
+                //BroadCAstReceiver
+//                val intent = Intent("PENDING_INTENT_SAM")
+//                intent.putExtra("pdfFile",pdfFile)
+//                intent.putExtra("isDownloaded",true)
+//                sendBroadcast(intent)
+
                 NotificationManagerCompat.from(this).cancel(1)
-                Utils.preferences.edit()?.putString("pdfUrl",pdfFile.toString())
-                    ?.apply()
-                Utils.preferences.edit()?.putBoolean("fileDownloaded",true)?.apply()
                 Log.d("#DownloadFeaature","StopDownload is call of Service")
-//                NotificationManagerCompat.from(this).cancel(1)
-//                val notificationManager = context.getSystemService(NotificationManager::class.java)
-//                val notification = NotificationCompat.Builder(context, "downloadNotification")
-//                    .setContentTitle("Download Complete")
-//                    .setContentText("File is downloaded")
-//                    .setSmallIcon(R.drawable.ic_launcher_foreground)
-//                    .setPriority(NotificationManager.IMPORTANCE_HIGH)
-//                    .setAutoCancel(true)
-//                    .build()
-//
-//                notificationManager.notify(2, notification)
+
 
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -177,5 +178,9 @@ class DownloadService : Service() {
         serviceJob.cancel()
         stopSelf()
         NotificationManagerCompat.from(this).cancel(1)
+    }
+
+    fun getService() : Pair<Boolean,String> {
+        return Pair(isDownloaded,pdfUrlLocal)
     }
 }
