@@ -5,7 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import androidx.annotation.DrawableRes
@@ -16,7 +16,9 @@ import androidx.core.net.toUri
 
 class DownloadNotificationService(
     private val context: Context,
-    stringUrl: String) {
+    stringUrl: String,
+    service: ServiceConnection
+) {
     private val notificationManager = context.getSystemService(NotificationManager::class.java)
 
     fun showBasicNotification(pdfUri: String) {
@@ -55,6 +57,13 @@ class DownloadNotificationService(
         putExtra("url",stringUrl)
     }
 
+    val i = Intent(context, DownloadService::class.java).also { intent ->
+        context.bindService(intent, service, Context.BIND_AUTO_CREATE)
+    }.apply {
+        action = "START_DOWNLOAD"
+        putExtra("url",stringUrl)
+    }
+
     val stopIntent = Intent(context,DownloadService::class.java).apply {
         action = "STOP_DOWNLOAD"
     }
@@ -83,7 +92,7 @@ class DownloadNotificationService(
             )
             .build()
 
-        context.startService(startIntent)
+        context.startService(i)
 
         notificationManager.notify(1,notification)
     }

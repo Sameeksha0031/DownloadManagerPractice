@@ -3,11 +3,7 @@ package com.example.downloadingfeaturesapplication
 import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.ComponentName
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.content.ServiceConnection
-import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
@@ -42,16 +38,16 @@ import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(),DownloadingProcess {
     var recevier : BroadcastReceiver ?= null
     private var downloadService : DownloadService ?= null
-    private var isBound = false
+    private var isBound by mutableStateOf(false)
 
     private val service = object : ServiceConnection {
         override fun onServiceConnected(p0: ComponentName?, binder: IBinder?) {
             val binder2 = binder as DownloadService.LocalBinder
             downloadService = binder2.getService()
-            isBound = true
+            downloadService?.downloadingProcess(this@MainActivity)
         }
 
         override fun onServiceDisconnected(p0: ComponentName?) {
@@ -66,7 +62,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val snackbarHostState = remember { SnackbarHostState() }
-
             var buttonClick by remember { mutableIntStateOf(0) }
             var showDownloadedCompleted by remember { mutableStateOf(false) }
             var pdfUri by remember { mutableStateOf("") }
@@ -83,21 +78,12 @@ class MainActivity : ComponentActivity() {
                 }
                 val waterNotificationService = DownloadNotificationService(
                     this,
-                    "https://www.iitk.ac.in/esc101/share/downloads/javanotes5.pdf"
+                    "https://www.iitk.ac.in/esc101/share/downloads/javanotes5.pdf",
+                    service
                 )
                 NavigationGraph(navHostController = navController, snackbarHostState) { value ->
                     buttonClick = value
                 }
-
-                /*recevier = object : BroadcastReceiver() {
-                    override fun onReceive(context: Context?, intent: Intent?) {
-                        if (intent != null) {
-                            pdfUri = intent.getStringExtra("pdfFile").toString()
-                            showDownloadedCompleted = intent.getBooleanExtra("isDownloaded",false)
-                        }
-                    }
-
-                }*/
 
                 if (isBound) {
                     val data = downloadService?.getService()
@@ -105,10 +91,12 @@ class MainActivity : ComponentActivity() {
                         showDownloadedCompleted = data.first
                         pdfUri = data.second
                     }
+                    isBound = false
                 }
 
                 if(showDownloadedCompleted){
                     waterNotificationService.showBasicNotification(pdfUri)
+                    showDownloadedCompleted = false
                 }
 
                 LaunchedEffect(Unit) {
@@ -144,16 +132,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        Intent(this, DownloadService::class.java).also { intent ->
-            bindService(intent, service, Context.BIND_AUTO_CREATE)
-        }
     }
 
     override fun onStop() {
-        if (isBound) {
-            unbindService(service)
-            isBound = false
-        }
+        super.onStop()
+    }
+
+    override fun getDownloadProcess(value: Boolean) {
+        isBound = value
     }
 }
 

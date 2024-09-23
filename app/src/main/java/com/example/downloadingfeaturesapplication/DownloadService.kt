@@ -30,6 +30,10 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
+interface DownloadingProcess {
+    fun getDownloadProcess(value : Boolean)
+}
+
 class DownloadService : Service() {
 
     private val binder = LocalBinder()
@@ -40,6 +44,7 @@ class DownloadService : Service() {
     private val downloadRepository = DownloadRepository()
     var pdfUrlLocal = ""
     var isDownloaded = false
+    var downloadingProcess : DownloadingProcess ?= null
 
     override fun onBind(p0: Intent?): IBinder = binder
 
@@ -51,8 +56,6 @@ class DownloadService : Service() {
         when(intent?.action) {
             "START_DOWNLOAD" -> {
                 Log.d("#DownloadFeaature","onStartDownload and START_DOWNLOAD")
-//                downloadId = startDownload(intent.getStringExtra("url"))
-//                getDownloadProgress(this@DownloadService,downloadId)
                 downloadFileUsingHttpUrlConnection(this@DownloadService, "https://www.iitk.ac.in/esc101/share/downloads/javanotes5.pdf")
             }
             "STOP_DOWNLOAD" -> {
@@ -142,26 +145,17 @@ class DownloadService : Service() {
                     fileOutputStream.write(buffer, 0, length)
                 }
 
+                downloadingProcess?.getDownloadProcess(true)
                 pdfUrlLocal = pdfFile.toString()
                 isDownloaded = true
+
                 // Close streams
                 fileOutputStream.flush()
                 fileOutputStream.close()
                 inputStream.close()
                 urlConnection.disconnect()
 
-//                serviceScope.launch {
-//                    Log.d("#DownloadFeaature","Inside Scope function")
-//                    downloadRepository.updateData(true,pdfFile.toString())
-//                }
-
-                //BroadCAstReceiver
-//                val intent = Intent("PENDING_INTENT_SAM")
-//                intent.putExtra("pdfFile",pdfFile)
-//                intent.putExtra("isDownloaded",true)
-//                sendBroadcast(intent)
-
-                NotificationManagerCompat.from(this).cancel(1)
+                stopDownload()
                 Log.d("#DownloadFeaature","StopDownload is call of Service")
 
 
@@ -183,4 +177,9 @@ class DownloadService : Service() {
     fun getService() : Pair<Boolean,String> {
         return Pair(isDownloaded,pdfUrlLocal)
     }
+
+    fun downloadingProcess(downloadingProcess: DownloadingProcess) {
+        this.downloadingProcess = downloadingProcess
+    }
+
 }
